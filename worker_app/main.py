@@ -29,7 +29,7 @@ from shared.redis_queue import redis_queue
 from loguru import logger
 
 # Configure logging
-logger.add("logs/worker_app.log", rotation="500 MB", level=settings.log_level)
+logger.add(os.path.join(settings.logs_dir, "worker_app.log"), rotation="500 MB", level=settings.log_level)
 
 class PDFExtractor:
     def __init__(self):
@@ -294,8 +294,11 @@ class PDFWorker:
         """Main worker loop"""
         logger.info(f"Worker {self.extractor.worker_id} started")
         
-        # Create logs directory
-        os.makedirs("logs", exist_ok=True)
+        # Create logs directory using absolute path
+        os.makedirs(settings.logs_dir, exist_ok=True)
+        
+        # Log path information
+        logger.info(f"Using logs directory: {settings.logs_dir}")
         
         # Test Redis connection
         if not redis_queue.ping():

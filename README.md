@@ -406,6 +406,31 @@ PAGES_PER_WORKER=3
 MASTER_HOST=127.0.0.1
 ```
 
+### 📁 Directory Structure & Paths
+
+Project menggunakan **absolute paths** untuk konsistensi:
+
+```bash
+pdf-ekstractor-service/
+├── uploads/              # 📂 Uploaded PDF files (AUTO-CREATED)
+├── temp/                 # 📂 Temporary files (AUTO-CREATED)  
+├── logs/                 # 📂 Application logs (AUTO-CREATED)
+├── master_app/           # 📱 Master application
+├── worker_app/           # 👷 Worker application
+└── shared/               # 🔧 Shared modules
+```
+
+**Important**: File paths sekarang menggunakan project root sebagai base directory, bukan working directory saat menjalankan aplikasi.
+
+**Check paths status:**
+```bash
+./check-paths.sh  # Lihat status direktori dan path configuration
+```
+
+**Upload file location:**
+- Files disimpan di: `{project_root}/uploads/{job_id}.pdf`
+- Contoh: `/path/to/pdf-ekstractor-service/uploads/a1b2c3d4-e5f6-7890-abcd-ef1234567890.pdf`
+
 ### Struktur Project
 
 ```
@@ -435,6 +460,7 @@ pdf-ekstractor-service/
 ├── run-master.sh            # Run only master app
 ├── run-worker.sh            # Run only worker app
 ├── stop-local.sh            # Stop all local services
+├── check-paths.sh           # Check directory paths and status
 └── test.sh                  # Test service functionality
 ```
 
@@ -448,6 +474,7 @@ pdf-ekstractor-service/
 | `run-master.sh` | Run only master app locally | `./run-master.sh` |
 | `run-worker.sh` | Run only worker app locally | `./run-worker.sh` |
 | `stop-local.sh` | Stop all local services | `./stop-local.sh` |
+| `check-paths.sh` | Check directory paths and status | `./check-paths.sh` |
 | `test.sh` | Test service functionality | `./test.sh` |
 
 **Script Usage Examples:**

@@ -23,7 +23,7 @@ from shared.redis_queue import redis_queue
 from loguru import logger
 
 # Configure logging
-logger.add("logs/master_app.log", rotation="500 MB", level=settings.log_level)
+logger.add(os.path.join(settings.logs_dir, "master_app.log"), rotation="500 MB", level=settings.log_level)
 
 app = FastAPI(
     title="PDF Extractor Master Service",
@@ -37,10 +37,15 @@ jobs_storage = {}
 @app.on_event("startup")
 async def startup_event():
     """Initialize master app"""
-    # Create necessary directories
+    # Create necessary directories (using absolute paths)
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs(settings.temp_dir, exist_ok=True)
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(settings.logs_dir, exist_ok=True)
+    
+    # Log path information
+    logger.info(f"Upload directory: {settings.upload_dir}")
+    logger.info(f"Temp directory: {settings.temp_dir}")
+    logger.info(f"Logs directory: {settings.logs_dir}")
     
     # Test Redis connection
     if not redis_queue.ping():
