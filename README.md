@@ -461,6 +461,7 @@ pdf-ekstractor-service/
 ├── run-worker.sh            # Run only worker app
 ├── stop-local.sh            # Stop all local services
 ├── check-paths.sh           # Check directory paths and status
+├── test-datetime.py         # Test datetime serialization fix
 └── test.sh                  # Test service functionality
 ```
 
@@ -475,6 +476,7 @@ pdf-ekstractor-service/
 | `run-worker.sh` | Run only worker app locally | `./run-worker.sh` |
 | `stop-local.sh` | Stop all local services | `./stop-local.sh` |
 | `check-paths.sh` | Check directory paths and status | `./check-paths.sh` |
+| `test-datetime.py` | Test datetime serialization fix | `./test-datetime.py` |
 | `test.sh` | Test service functionality | `./test.sh` |
 
 **Script Usage Examples:**
@@ -640,6 +642,20 @@ curl "http://localhost:8000/job-result/{job_id}"
    # Atau jalankan dengan
    python -m master_app.main
    python -m worker_app.main
+   ```
+
+8. **DateTime Serialization Errors**
+   ```bash
+   # Error: Object of type datetime is not JSON serializable
+   
+   # Test datetime serialization fix
+   ./test-datetime.py
+   
+   # Jika masih error, check Redis connection
+   redis-cli ping
+   
+   # Restart Redis jika perlu
+   sudo systemctl restart redis-server
    ```
 
 ### Common Development Fixes

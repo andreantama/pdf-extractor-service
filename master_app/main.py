@@ -98,7 +98,8 @@ async def process_worker_result(result: TaskResult):
         logger.info(f"Job {job_id} completed successfully")
     
     # Update job status di Redis
-    redis_queue.set_job_status(job_id, job.model_dump())
+    job_data = job.model_dump()
+    redis_queue.set_job_status(job_id, job_data)
     
     # Store in memory untuk quick access
     jobs_storage[job_id] = job
@@ -161,7 +162,8 @@ async def upload_pdf(
         )
         
         # Store job status
-        redis_queue.set_job_status(job_id, job_status.model_dump())
+        job_data = job_status.model_dump()
+        redis_queue.set_job_status(job_id, job_data)
         jobs_storage[job_id] = job_status
         
         # Start processing in background
@@ -189,7 +191,8 @@ async def process_pdf_async(job_id: str, file_path: str, total_pages: int):
         # Update job status to processing
         job_status = jobs_storage[job_id]
         job_status.status = TaskStatus.PROCESSING
-        redis_queue.set_job_status(job_id, job_status.model_dump())
+        job_data = job_status.model_dump()
+        redis_queue.set_job_status(job_id, job_data)
         
         # Split pages untuk workers
         page_groups = split_pages_for_workers(total_pages)
@@ -217,7 +220,8 @@ async def process_pdf_async(job_id: str, file_path: str, total_pages: int):
         job_status = jobs_storage.get(job_id)
         if job_status:
             job_status.status = TaskStatus.FAILED
-            redis_queue.set_job_status(job_id, job_status.model_dump())
+            job_data = job_status.model_dump()
+            redis_queue.set_job_status(job_id, job_data)
 
 @app.get("/job-status/{job_id}", response_model=JobStatus)
 async def get_job_status(job_id: str):
