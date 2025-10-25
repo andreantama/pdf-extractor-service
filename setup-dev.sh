@@ -30,7 +30,7 @@ fi
 
 # Activate virtual environment
 echo "🔌 Activating virtual environment..."
-source myenv/bin/activate
+source venv/bin/activate
 
 # Upgrade pip
 echo "⬆️  Upgrading pip..."
