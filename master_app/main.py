@@ -91,11 +91,14 @@ async def process_worker_result(result: TaskResult):
     job.results.extend(result.page_results)
     job.completed_pages += len(result.page_results)
     
+    # 📊 Calculate failed pages
+    job.failed_pages = sum(1 for page_result in job.results if page_result.status == TaskStatus.FAILED)
+    
     # Check if semua halaman sudah selesai
     if job.completed_pages >= job.total_pages:
         job.status = TaskStatus.COMPLETED
         job.completed_at = datetime.now()
-        logger.info(f"Job {job_id} completed successfully")
+        logger.info(f"Job {job_id} completed successfully - {job.completed_pages}/{job.total_pages} pages, {job.failed_pages} failed")
     
     # Update job status di Redis
     job_data = job.model_dump()
@@ -256,7 +259,8 @@ async def get_job_result(job_id: str):
     if job_status.completed_at and job_status.created_at:
         processing_time = (job_status.completed_at - job_status.created_at).total_seconds()
     
-    return PDFProcessingResult(
+    # 🤖 Create processing result dengan knowledge aggregation
+    result = PDFProcessingResult(
         job_id=job_id,
         status=job_status.status,
         total_pages=job_status.total_pages,
@@ -267,6 +271,55 @@ async def get_job_result(job_id: str):
         created_at=job_status.created_at,
         completed_at=job_status.completed_at
     )
+    
+    # 📚 Aggregate full document knowledge untuk RAG
+    if job_status.status == TaskStatus.COMPLETED:
+        result.aggregate_knowledge()
+        logger.info(f"Generated {len(result.full_document_knowledge)} characters of full document knowledge")
+    
+    return result
+
+@app.get("/job-knowledge/{job_id}")
+async def get_job_knowledge(job_id: str):
+    """Get aggregated knowledge content untuk RAG consumption"""
+    
+    job_status = await get_job_status(job_id)
+    
+    if job_status.status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+        raise HTTPException(status_code=400, detail="Job not yet completed")
+    
+    # Sort hasil berdasarkan page number
+    sorted_results = sorted(job_status.results, key=lambda x: x.page_number)
+    
+    # Aggregate page knowledge
+    page_knowledge = []
+    for page_result in sorted_results:
+        if page_result.knowledge.strip():
+            page_knowledge.append({
+                "page_number": page_result.page_number,
+                "knowledge": page_result.knowledge,
+                "status": page_result.status,
+                "processing_time": page_result.processing_time
+            })
+    
+    # Create full document knowledge
+    full_knowledge = "\n\n".join([
+        f"Page {page['page_number']}:\n{page['knowledge']}" 
+        for page in page_knowledge
+    ])
+    
+    return {
+        "job_id": job_id,
+        "status": job_status.status,
+        "total_pages": job_status.total_pages,
+        "processed_pages": len(page_knowledge),
+        "failed_pages": job_status.failed_pages,
+        "page_knowledge": page_knowledge,
+        "full_document_knowledge": full_knowledge,
+        "knowledge_length": len(full_knowledge),
+        "created_at": job_status.created_at,
+        "completed_at": job_status.completed_at
+    }
 
 @app.get("/health")
 async def health_check():

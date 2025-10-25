@@ -37,6 +37,7 @@ class ExtractedContent(BaseModel):
 class PageResult(BaseModel):
     page_number: int
     content: List[ExtractedContent]
+    knowledge: str = ""  # 🆕 Aggregated text content for RAG
     processing_time: float
     status: TaskStatus
     error_message: Optional[str] = None
@@ -82,5 +83,17 @@ class PDFProcessingResult(BaseModel):
     failed_pages: int
     processing_time: float
     results: List[PageResult]
+    full_document_knowledge: str = ""  # 🆕 Complete document knowledge
     created_at: datetime
     completed_at: Optional[datetime] = None
+    
+    def aggregate_knowledge(self) -> str:
+        """Aggregate knowledge from all pages into full document knowledge"""
+        knowledge_parts = []
+        
+        for page_result in sorted(self.results, key=lambda x: x.page_number):
+            if page_result.knowledge.strip():
+                knowledge_parts.append(f"Page {page_result.page_number}:\n{page_result.knowledge}")
+        
+        self.full_document_knowledge = "\n\n".join(knowledge_parts)
+        return self.full_document_knowledge

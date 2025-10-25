@@ -263,6 +263,101 @@ GET /job-result/{job_id}
 }
 ```
 
+### Get RAG Knowledge (New! 🧠)
+
+```http
+GET /job-knowledge/{job_id}
+```
+
+**Description:** Mendapatkan knowledge yang telah diagregasi untuk konsumsi RAG model.
+
+**Response:**
+```json
+{
+  "job_id": "uuid-string",
+  "status": "completed",
+  "total_pages": 25,
+  "processed_pages": 25,
+  "failed_pages": 0,
+  "page_knowledge": [
+    {
+      "page_number": 1,
+      "knowledge": "Laporan Keuangan Tahunan 2023. Perusahaan mengalami pertumbuhan revenue sebesar 15%...",
+      "status": "completed"
+    }
+  ],
+  "full_document_knowledge": "Page 1:\nLaporan Keuangan Tahunan 2023...\n\nPage 2:\nTabel distribusi penjualan...",
+  "knowledge_length": 1543
+}
+```
+
+**Key Features untuk RAG:**
+- `full_document_knowledge`: Complete aggregated text dari seluruh dokumen
+- `page_knowledge`: Knowledge per halaman untuk attribution
+- Text sudah dinormalisasi dan dibersihkan untuk konsumsi RAG
+- Menggabungkan hasil ekstraksi text, table, dan OCR image
+
+## 🧠 RAG Integration
+
+### Knowledge Aggregation
+
+Service ini menyediakan knowledge aggregation yang telah dioptimasi untuk RAG (Retrieval-Augmented Generation) model. Setiap halaman PDF diekstrak dan content-nya digabungkan menjadi knowledge string yang clean dan normalized.
+
+### Format Knowledge
+
+```json
+{
+  "full_document_knowledge": "Page 1:\nContent from all sources...\n\nPage 2:\n...",
+  "page_knowledge": [
+    {
+      "page_number": 1,
+      "knowledge": "Combined text from text extraction + table content + OCR results",
+      "status": "completed"
+    }
+  ],
+  "knowledge_length": 1543
+}
+```
+
+### Knowledge Processing
+
+Knowledge dibuat dengan menggabungkan:
+- **Text Extraction**: Teks yang diekstrak langsung dari PDF
+- **Table Content**: Data dari tabel yang dikonversi ke teks
+- **OCR Results**: Teks dari image yang di-OCR dengan EasyOCR
+- **Normalization**: Pembersihan whitespace, karakter khusus, dan formatting
+
+### RAG Integration Example
+
+```python
+import requests
+
+# Upload dan proses PDF
+upload_response = requests.post("http://localhost:8000/upload-pdf", files={'file': pdf_file})
+job_id = upload_response.json()['job_id']
+
+# Tunggu processing selesai
+# ... status checking ...
+
+# Ambil knowledge untuk RAG
+knowledge_response = requests.get(f"http://localhost:8000/job-knowledge/{job_id}")
+knowledge_data = knowledge_response.json()
+
+# Gunakan untuk RAG
+rag_input = knowledge_data['full_document_knowledge']
+# Feed ke RAG model...
+```
+
+### Testing RAG Knowledge
+
+```bash
+# Test knowledge aggregation
+python3 test-knowledge.py
+
+# Lihat contoh knowledge format
+python3 rag-knowledge-example.py
+```
+
 ## ⚙️ Konfigurasi
 
 ### Environment Variables

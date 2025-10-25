@@ -197,6 +197,98 @@ class PDFExtractor:
             
         return image_contents
     
+    def aggregate_knowledge_from_content(self, content_list: List[ExtractedContent]) -> str:
+        """Aggregate all extracted content into a single knowledge string for RAG"""
+        knowledge_parts = []
+        
+        # Group content by type for better organization
+        text_parts = []
+        table_parts = []
+        image_parts = []
+        
+        for content in content_list:
+            if content.content_type == ContentType.TEXT:
+                if isinstance(content.content, str) and content.content.strip():
+                    text_parts.append(content.content.strip())
+                    
+            elif content.content_type == ContentType.TABLE:
+                if isinstance(content.content, dict):
+                    table_data = content.content
+                    
+                    # Extract table as readable text
+                    if "headers" in table_data and "rows" in table_data:
+                        headers = table_data["headers"]
+                        rows = table_data["rows"]
+                        
+                        # Format table as text
+                        table_text = f"Table: {table_data.get('table_id', 'Unknown')}\n"
+                        if headers:
+                            table_text += " | ".join(str(h) for h in headers) + "\n"
+                            table_text += "-" * (len(" | ".join(str(h) for h in headers))) + "\n"
+                            
+                        for row in rows:
+                            if row:
+                                table_text += " | ".join(str(cell) for cell in row) + "\n"
+                                
+                        table_parts.append(table_text.strip())
+                        
+            elif content.content_type == ContentType.IMAGE:
+                if isinstance(content.content, dict):
+                    image_data = content.content
+                    
+                    # Extract text from image OCR results
+                    if "text_summary" in image_data and image_data["text_summary"]:
+                        image_text = f"Image {image_data.get('image_id', 'Unknown')} Text: {image_data['text_summary']}"
+                        image_parts.append(image_text)
+                        
+                    # Also include detailed extracted text if available
+                    elif "extracted_text" in image_data and image_data["extracted_text"]:
+                        extracted_texts = []
+                        for text_item in image_data["extracted_text"]:
+                            if isinstance(text_item, dict) and "text" in text_item:
+                                extracted_texts.append(text_item["text"])
+                        
+                        if extracted_texts:
+                            image_text = f"Image {image_data.get('image_id', 'Unknown')} Text: {' '.join(extracted_texts)}"
+                            image_parts.append(image_text)
+        
+        # Combine all parts with clear separation
+        if text_parts:
+            knowledge_parts.append("TEXT CONTENT:\n" + "\n".join(text_parts))
+            
+        if table_parts:
+            knowledge_parts.append("TABLE CONTENT:\n" + "\n\n".join(table_parts))
+            
+        if image_parts:
+            knowledge_parts.append("IMAGE TEXT CONTENT:\n" + "\n".join(image_parts))
+        
+        # Join all parts
+        knowledge = "\n\n".join(knowledge_parts)
+        
+        # Clean up and normalize text
+        knowledge = self._clean_knowledge_text(knowledge)
+        
+        return knowledge
+    
+    def _clean_knowledge_text(self, text: str) -> str:
+        """Clean and normalize knowledge text"""
+        import re
+        
+        # Remove extra whitespaces and normalize line breaks
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        
+        # Remove very short fragments (likely noise)
+        lines = text.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if len(line) > 2:  # Keep lines with more than 2 characters
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines).strip()
+    
     def process_page(self, pdf_path: str, page_number: int) -> PageResult:
         """Process single page dan extract semua content"""
         start_time = time.time()
@@ -225,11 +317,16 @@ class PDFExtractor:
             
             doc.close()
             
+            # 🤖 Aggregate knowledge for RAG
+            knowledge = self.aggregate_knowledge_from_content(all_content)
+            logger.info(f"Generated {len(knowledge)} characters of knowledge for page {page_number}")
+            
             processing_time = time.time() - start_time
             
             return PageResult(
                 page_number=page_number,
                 content=all_content,
+                knowledge=knowledge,  # 🆕 New aggregated knowledge field
                 processing_time=processing_time,
                 status=TaskStatus.COMPLETED
             )
@@ -241,6 +338,7 @@ class PDFExtractor:
             return PageResult(
                 page_number=page_number,
                 content=[],
+                knowledge="",  # 🆕 Empty knowledge for failed pages
                 processing_time=processing_time,
                 status=TaskStatus.FAILED,
                 error_message=str(e)
