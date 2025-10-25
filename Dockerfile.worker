@@ -1,0 +1,49 @@
+FROM python:3.12.3-slim
+
+LABEL maintainer="PDF Extractor Service"
+LABEL description="Worker service untuk PDF extraction"
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ind \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    poppler-utils \
+    libopencv-dev \
+    python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy shared modules
+COPY shared/ ./shared/
+
+# Copy worker app
+COPY worker_app/ ./worker_app/
+
+# Create necessary directories
+RUN mkdir -p logs
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Set tesseract path (for pytesseract)
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata/
+
+# Run worker app
+CMD ["python", "worker_app/main.py"]

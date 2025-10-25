@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # Redis untuk queue management
+  redis:
+    image: redis:7-alpine
+    container_name: pdf-extractor-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - pdf-extractor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Master App
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile.master
+    container_name: pdf-extractor-master
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - MASTER_HOST=0.0.0.0
+      - MASTER_PORT=8000
+      - LOG_LEVEL=INFO
+      - PAGES_PER_WORKER=5
+      - MAX_FILE_SIZE=104857600  # 100MB
+    volumes:
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+      - ./logs:/app/logs
+    networks:
+      - pdf-extractor-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Worker App (dapat di-scale)
+  worker1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: pdf-extractor-worker1
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+      - WORKER_CONCURRENCY=4
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    networks:
+      - pdf-extractor-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: pdf-extractor-worker2
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+      - WORKER_CONCURRENCY=4
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    networks:
+      - pdf-extractor-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Optional: Redis Commander untuk monitoring Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: pdf-extractor-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - pdf-extractor-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    profiles:
+      - debug
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  pdf-extractor-network:
+    driver: bridge
