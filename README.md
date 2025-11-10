@@ -739,7 +739,7 @@ curl "http://localhost:8000/job-result/{job_id}"
    python -m worker_app.main
    ```
 
-8. **DateTime Serialization Errors**
+7. **DateTime Serialization Errors**
    ```bash
    # Error: Object of type datetime is not JSON serializable
    
@@ -751,6 +751,25 @@ curl "http://localhost:8000/job-result/{job_id}"
    
    # Restart Redis jika perlu
    sudo systemctl restart redis-server
+   ```
+
+8. **PIL.Image.ANTIALIAS Error (Pillow 10.0.0+)**
+   ```bash
+   # Error: module 'PIL.Image' has no attribute 'ANTIALIAS'
+   
+   # Quick fix dengan script otomatis
+   python3 fix-pil-antialias.py
+   
+   # Manual fix - install Pillow versi kompatibel
+   pip uninstall -y Pillow
+   pip install Pillow==10.3.0
+   pip install --upgrade easyocr==1.7.1
+   
+   # Atau gunakan Pillow versi lama
+   pip install Pillow==9.5.0
+   
+   # Test fix
+   python3 -c "from PIL import Image; print('✅ PIL working')"
    ```
 
 ### Common Development Fixes

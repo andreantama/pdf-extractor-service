@@ -17,6 +17,17 @@ import io
 import json
 from datetime import datetime
 
+# 🔧 PIL Compatibility Fix for Pillow 10.0.0+
+# Handle ANTIALIAS deprecation in newer Pillow versions
+try:
+    # For Pillow >= 10.0.0
+    ANTIALIAS = Image.LANCZOS
+    if not hasattr(Image, 'ANTIALIAS'):
+        Image.ANTIALIAS = Image.LANCZOS
+except AttributeError:
+    # For older Pillow versions
+    ANTIALIAS = Image.ANTIALIAS
+
 # Import shared modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
