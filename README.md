@@ -772,6 +772,28 @@ curl "http://localhost:8000/job-result/{job_id}"
    python3 -c "from PIL import Image; print('✅ PIL working')"
    ```
 
+9. **JSON Serialization Error (int64/numpy types)**
+   ```bash
+   # Error: Object of type int64 is not JSON serializable
+   
+   # Test fix dengan script otomatis
+   python3 test-int64-fix.py
+   
+   # Manual check - test numpy/pandas serialization
+   python3 -c "
+   import json
+   import numpy as np
+   from shared.redis_queue import DateTimeEncoder
+   data = {'test': np.int64(123)}
+   result = json.dumps(data, cls=DateTimeEncoder)
+   print('✅ int64 serialization working')
+   "
+   
+   # Jika masih error, restart service
+   ./stop-local.sh
+   ./run-local.sh
+   ```
+
 ### Common Development Fixes
 
 **Reset Development Environment:**

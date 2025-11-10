@@ -1,5 +1,7 @@
 import redis
 import json
+import numpy as np
+import pandas as pd
 from datetime import datetime
 from typing import Any, Optional
 from .config import settings
@@ -7,10 +9,62 @@ from .models import PageTask, TaskResult
 from loguru import logger
 
 class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder untuk handle datetime objects"""
+    """Custom JSON encoder untuk handle datetime objects dan numpy/pandas types"""
     def default(self, obj):
+        # Handle datetime objects
         if isinstance(obj, datetime):
             return obj.isoformat()
+        
+        # Handle numpy integers
+        if isinstance(obj, (np.integer, np.int8, np.int16, np.int32, np.int64)):
+            return int(obj)
+        
+        # Handle numpy floats
+        if isinstance(obj, (np.floating, np.float16, np.float32, np.float64)):
+            return float(obj)
+        
+        # Handle numpy booleans
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        
+        # Handle numpy arrays
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        
+        # Handle pandas nullable integers
+        if isinstance(obj, pd._libs.missing.NAType):
+            return None
+        
+        # Handle pandas integers and floats
+        if hasattr(obj, 'dtype') and hasattr(obj, 'item'):
+            # Convert pandas scalars to native Python types
+            try:
+                return obj.item()
+            except (ValueError, TypeError):
+                pass
+        
+        # Handle general pandas types
+        if hasattr(pd, 'api') and hasattr(pd.api, 'types'):
+            if pd.api.types.is_integer_dtype(type(obj)):
+                return int(obj)
+            elif pd.api.types.is_float_dtype(type(obj)):
+                return float(obj)
+            elif pd.api.types.is_bool_dtype(type(obj)):
+                return bool(obj)
+        
+        # Fallback: try to convert to basic Python types
+        if hasattr(obj, '__int__'):
+            try:
+                return int(obj)
+            except (ValueError, TypeError, OverflowError):
+                pass
+        
+        if hasattr(obj, '__float__'):
+            try:
+                return float(obj)
+            except (ValueError, TypeError, OverflowError):
+                pass
+        
         return super().default(obj)
 
 class RedisQueue:
@@ -23,6 +77,31 @@ class RedisQueue:
             decode_responses=True
         )
     
+    def _clean_data_for_serialization(self, data: Any) -> Any:
+        """Clean data untuk memastikan bisa di-serialize ke JSON"""
+        if isinstance(data, dict):
+            return {key: self._clean_data_for_serialization(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._clean_data_for_serialization(item) for item in data]
+        elif isinstance(data, (np.integer, np.int8, np.int16, np.int32, np.int64)):
+            return int(data)
+        elif isinstance(data, (np.floating, np.float16, np.float32, np.float64)):
+            return float(data)
+        elif isinstance(data, np.bool_):
+            return bool(data)
+        elif isinstance(data, np.ndarray):
+            return data.tolist()
+        elif hasattr(data, 'dtype') and hasattr(data, 'item'):
+            # Handle pandas scalars
+            try:
+                return data.item()
+            except (ValueError, TypeError):
+                return str(data)
+        elif pd.isna(data) or (hasattr(pd, '_libs') and isinstance(data, pd._libs.missing.NAType)):
+            return None
+        else:
+            return data
+    
     def ping(self) -> bool:
         """Test Redis connection"""
         try:
@@ -34,8 +113,10 @@ class RedisQueue:
     def push_task(self, task: PageTask) -> bool:
         """Push task to processing queue"""
         try:
-            # Use custom encoder untuk handle datetime
-            task_data = json.dumps(task.model_dump(), cls=DateTimeEncoder)
+            # Clean data dan use custom encoder untuk handle datetime dan numpy types
+            task_data_dict = task.model_dump()
+            cleaned_data = self._clean_data_for_serialization(task_data_dict)
+            task_data = json.dumps(cleaned_data, cls=DateTimeEncoder)
             self.redis_client.lpush(settings.pdf_processing_queue, task_data)
             logger.info(f"Task {task.task_id} pushed to queue")
             return True
@@ -63,13 +144,21 @@ class RedisQueue:
     def push_result(self, result: TaskResult) -> bool:
         """Push result to result queue"""
         try:
-            # Use custom encoder untuk handle datetime
-            result_data = json.dumps(result.model_dump(), cls=DateTimeEncoder)
+            # Clean data dan use custom encoder untuk handle datetime dan numpy types
+            result_data_dict = result.model_dump()
+            cleaned_data = self._clean_data_for_serialization(result_data_dict)
+            result_data = json.dumps(cleaned_data, cls=DateTimeEncoder)
             self.redis_client.lpush(settings.result_queue, result_data)
             logger.info(f"Result for task {result.task_id} pushed to result queue")
             return True
         except Exception as e:
             logger.error(f"Failed to push result for task {result.task_id}: {e}")
+            # Log additional debug info
+            logger.debug(f"Result data type: {type(result)}")
+            if hasattr(result, 'page_results') and result.page_results:
+                logger.debug(f"Page results count: {len(result.page_results)}")
+                for i, page_result in enumerate(result.page_results[:2]):  # Log first 2 pages
+                    logger.debug(f"Page {i+1} content count: {len(page_result.content) if page_result.content else 0}")
             return False
     
     def get_result(self, timeout: int = 1) -> Optional[TaskResult]:
@@ -93,8 +182,9 @@ class RedisQueue:
         """Store job status in Redis"""
         try:
             key = f"job_status:{job_id}"
-            # Use custom encoder untuk handle datetime
-            json_data = json.dumps(status_data, cls=DateTimeEncoder)
+            # Clean data dan use custom encoder untuk handle datetime dan numpy types
+            cleaned_data = self._clean_data_for_serialization(status_data)
+            json_data = json.dumps(cleaned_data, cls=DateTimeEncoder)
             self.redis_client.set(key, json_data, ex=3600)  # Expire in 1 hour
             logger.debug(f"Job status saved for {job_id}")
             return True
